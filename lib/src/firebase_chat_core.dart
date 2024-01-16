@@ -100,14 +100,16 @@ class FirebaseChatCore {
   Future<types.Room> createRoom(
     types.User otherUser, {
     Map<String, dynamic>? metadata,
+    bool isOwner = false,
   }) async {
     final fu = firebaseUser;
 
     if (fu == null) return Future.error('User does not exist');
+    var id = isOwner ? '${fu.uid}owner' : fu.uid;
 
     // Sort two user ids array to always have the same array for both users,
     // this will make it easy to find the room if exist and make one read only.
-    final userIds = [fu.uid, otherUser.id]..sort();
+    final userIds = [id, otherUser.id]..sort();
 
     final roomQuery = await getFirebaseFirestore()
         .collection(config.roomsCollectionName)
@@ -307,19 +309,20 @@ class FirebaseChatCore {
   /// 3) Create an Index (Firestore Database -> Indexes tab) where collection ID
   /// is `rooms`, field indexed are `userIds` (type Arrays) and `updatedAt`
   /// (type Descending), query scope is `Collection`.
-  Stream<List<types.Room>> rooms({bool orderByUpdatedAt = false}) {
+  Stream<List<types.Room>> rooms({bool orderByUpdatedAt = false, bool isOwner = false}) {
     final fu = firebaseUser;
 
     if (fu == null) return const Stream.empty();
+    var id = isOwner ? '${fu.uid}owner' : fu.uid;
 
     final collection = orderByUpdatedAt
         ? getFirebaseFirestore()
             .collection(config.roomsCollectionName)
-            .where('userIds', arrayContains: fu.uid)
+            .where('userIds', arrayContains: id)
             .orderBy('updatedAt', descending: true)
         : getFirebaseFirestore()
             .collection(config.roomsCollectionName)
-            .where('userIds', arrayContains: fu.uid);
+            .where('userIds', arrayContains: id);
 
     return collection.snapshots().asyncMap(
           (query) => processRoomsQuery(
@@ -334,32 +337,33 @@ class FirebaseChatCore {
   /// Sends a message to the Firestore. Accepts any partial message and a
   /// room ID. If arbitraty data is provided in the [partialMessage]
   /// does nothing.
-  void sendMessage(dynamic partialMessage, String roomId) async {
+  void sendMessage(dynamic partialMessage, String roomId, {bool isOwner = false}) async {
     if (firebaseUser == null) return;
+    var id = isOwner ? '${firebaseUser!.uid}owner' : firebaseUser!.uid;
 
     types.Message? message;
 
     if (partialMessage is types.PartialCustom) {
       message = types.CustomMessage.fromPartial(
-        author: types.User(id: firebaseUser!.uid),
+        author: types.User(id: id),
         id: '',
         partialCustom: partialMessage,
       );
     } else if (partialMessage is types.PartialFile) {
       message = types.FileMessage.fromPartial(
-        author: types.User(id: firebaseUser!.uid),
+        author: types.User(id: id),
         id: '',
         partialFile: partialMessage,
       );
     } else if (partialMessage is types.PartialImage) {
       message = types.ImageMessage.fromPartial(
-        author: types.User(id: firebaseUser!.uid),
+        author: types.User(id: id),
         id: '',
         partialImage: partialMessage,
       );
     } else if (partialMessage is types.PartialText) {
       message = types.TextMessage.fromPartial(
-        author: types.User(id: firebaseUser!.uid),
+        author: types.User(id: id),
         id: '',
         partialText: partialMessage,
       );
@@ -368,7 +372,7 @@ class FirebaseChatCore {
     if (message != null) {
       final messageMap = message.toJson();
       messageMap.removeWhere((key, value) => key == 'author' || key == 'id');
-      messageMap['authorId'] = firebaseUser!.uid;
+      messageMap['authorId'] = id;
       messageMap['createdAt'] = FieldValue.serverTimestamp();
       messageMap['updatedAt'] = FieldValue.serverTimestamp();
 
