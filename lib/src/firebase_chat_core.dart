@@ -314,7 +314,7 @@ class FirebaseChatCore {
 
     if (fu == null) return const Stream.empty();
     var id = isOwner ? '${fu.uid}owner' : fu.uid;
-
+//fix
     final collection = orderByUpdatedAt
         ? getFirebaseFirestore()
             .collection(config.roomsCollectionName)
